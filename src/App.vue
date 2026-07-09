@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
 </script>
 
 <template>
-  <HelloWorld />
+  <div class="min-h-screen bg-slate-100">
+    <AppHeader />
+  </div>
 </template>
