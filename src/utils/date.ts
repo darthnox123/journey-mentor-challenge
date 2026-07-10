@@ -1,6 +1,7 @@
 export function shiftDate(dateStr: string, deltaDays: number): string {
-  const date = new Date(`${dateStr}T00:00:00`)
-  date.setDate(date.getDate() + deltaDays)
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + deltaDays)
   return date.toISOString().slice(0, 10)
 }
 
