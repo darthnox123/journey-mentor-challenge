@@ -1,32 +1,28 @@
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { useStorage } from '@vueuse/core'
+import { useUrlSearchParams } from '@vueuse/core'
 import { createOfferRequest } from '@/services/offers'
 import { DuffelApiError } from '@/services/duffelClient'
 import { parseIsoDuration } from '@/utils/duration'
 import { shiftDate, todayIsoDate } from '@/utils/date'
-import type { Offer } from '@/types/duffel'
-import type { FilterState, SearchFormState, SearchStatus, SortOption } from '@/types/search'
+import type { CabinClass, Offer } from '@/types/duffel'
+import type { FilterState, SearchFormState, SearchStatus, SortDirection, SortOption, StopFilter } from '@/types/search'
 
-function defaultForm(): SearchFormState {
-  return {
-    origin: '',
-    originName: '',
-    destination: '',
-    destinationName: '',
-    departureDate: todayIsoDate(),
-    passengers: 1,
-    cabinClass: 'economy',
-  }
-}
-
-function defaultFilters(): FilterState {
-  return {
-    stops: 'any',
-    maxPrice: null,
-    departureAfter: null,
-    departureBefore: null,
-  }
+interface SearchQueryParams {
+  origin?: string
+  originName?: string
+  destination?: string
+  destinationName?: string
+  date?: string
+  pax?: string
+  cabin?: string
+  sort?: string
+  dir?: string
+  stops?: string
+  airline?: string
+  maxPrice?: string
+  after?: string
+  before?: string
 }
 
 // Module-scoped so aborting/sequencing survives store re-instantiation without
@@ -35,23 +31,108 @@ let currentController: AbortController | null = null
 let requestSeq = 0
 
 export const useSearchStore = defineStore('search', () => {
-  const form = useStorage<SearchFormState>('journey-mentor:search-form', defaultForm())
-  const sort = useStorage<SortOption>('journey-mentor:search-sort', 'price')
-  const filters = useStorage<FilterState>('journey-mentor:search-filters', defaultFilters())
+  const query = useUrlSearchParams<SearchQueryParams>('history')
 
-  const status = useStorage<SearchStatus>('journey-mentor:search-status', 'idle')
-  const offers = useStorage<Offer[]>('journey-mentor:search-offers', [])
-  const offerRequestId = useStorage<string | null>('journey-mentor:search-offer-request-id', null)
+  const form = reactive<SearchFormState>({
+    get origin() {
+      return query.origin ?? ''
+    },
+    set origin(value: string) {
+      query.origin = value || undefined
+    },
+    get originName() {
+      return query.originName ?? ''
+    },
+    set originName(value: string) {
+      query.originName = value || undefined
+    },
+    get destination() {
+      return query.destination ?? ''
+    },
+    set destination(value: string) {
+      query.destination = value || undefined
+    },
+    get destinationName() {
+      return query.destinationName ?? ''
+    },
+    set destinationName(value: string) {
+      query.destinationName = value || undefined
+    },
+    get departureDate() {
+      return query.date || todayIsoDate()
+    },
+    set departureDate(value: string) {
+      query.date = value || undefined
+    },
+    get passengers() {
+      return Number(query.pax) || 1
+    },
+    set passengers(value: number) {
+      query.pax = String(value)
+    },
+    get cabinClass() {
+      return (query.cabin as CabinClass) || 'economy'
+    },
+    set cabinClass(value: CabinClass) {
+      query.cabin = value
+    },
+  })
+
+  const filters = reactive<FilterState>({
+    get stops() {
+      return (query.stops as StopFilter) || 'any'
+    },
+    set stops(value: StopFilter) {
+      query.stops = value === 'any' ? undefined : value
+    },
+    get airline() {
+      return query.airline || null
+    },
+    set airline(value: string | null) {
+      query.airline = value || undefined
+    },
+    get maxPrice() {
+      return query.maxPrice ? Number(query.maxPrice) : null
+    },
+    set maxPrice(value: number | null) {
+      query.maxPrice = value != null ? String(value) : undefined
+    },
+    get departureAfter() {
+      return query.after || null
+    },
+    set departureAfter(value: string | null) {
+      query.after = value || undefined
+    },
+    get departureBefore() {
+      return query.before || null
+    },
+    set departureBefore(value: string | null) {
+      query.before = value || undefined
+    },
+  })
+
+  const sort = computed<SortOption>({
+    get: () => (query.sort as SortOption) || 'departure_time',
+    set: (value) => {
+      query.sort = value
+    },
+  })
+
+  const sortDirection = computed<SortDirection>({
+    get: () => (query.dir as SortDirection) || 'asc',
+    set: (value) => {
+      query.dir = value === 'asc' ? undefined : value
+    },
+  })
+
+  const status = ref<SearchStatus>('idle')
+  const offers = ref<Offer[]>([])
+  const offerRequestId = ref<string | null>(null)
   const error = ref<string | null>(null)
-
-  // A request that was in flight when the tab closed can never resolve on reload.
-  if (status.value === 'loading') {
-    status.value = offers.value.length > 0 ? 'success' : 'idle'
-  }
 
   async function search(overrides?: Partial<SearchFormState>) {
     if (overrides) {
-      form.value = { ...form.value, ...overrides }
+      Object.assign(form, overrides)
     }
 
     currentController?.abort()
@@ -64,11 +145,11 @@ export const useSearchStore = defineStore('search', () => {
 
     try {
       const response = await createOfferRequest({
-        origin: form.value.origin,
-        destination: form.value.destination,
-        departureDate: form.value.departureDate,
-        passengers: form.value.passengers,
-        cabinClass: form.value.cabinClass,
+        origin: form.origin,
+        destination: form.destination,
+        departureDate: form.departureDate,
+        passengers: form.passengers,
+        cabinClass: form.cabinClass,
         signal: controller.signal,
       })
 
@@ -88,24 +169,45 @@ export const useSearchStore = defineStore('search', () => {
     }
   }
 
+  // The URL already encodes a complete search (deep link, shared link, reload) — run it.
+  if (form.origin && form.destination) {
+    search()
+  }
+
   function shiftDateWindow(deltaDays: number) {
-    return search({ departureDate: shiftDate(form.value.departureDate, deltaDays) })
+    return search({ departureDate: shiftDate(form.departureDate, deltaDays) })
   }
 
   function setSort(option: SortOption) {
-    sort.value = option
+    if (sort.value !== option) {
+      sort.value = option
+      sortDirection.value = 'asc'
+    } else {
+      sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    }
   }
 
   function setFilters(partial: Partial<FilterState>) {
-    filters.value = { ...filters.value, ...partial }
+    Object.assign(filters, partial)
   }
 
   function reset() {
     currentController?.abort()
     requestSeq++
-    form.value = defaultForm()
-    filters.value = defaultFilters()
-    sort.value = 'price'
+    query.origin = undefined
+    query.originName = undefined
+    query.destination = undefined
+    query.destinationName = undefined
+    query.date = undefined
+    query.pax = undefined
+    query.cabin = undefined
+    query.stops = undefined
+    query.airline = undefined
+    query.maxPrice = undefined
+    query.after = undefined
+    query.before = undefined
+    query.sort = undefined
+    query.dir = undefined
     offers.value = []
     offerRequestId.value = null
     status.value = 'idle'
@@ -118,18 +220,20 @@ export const useSearchStore = defineStore('search', () => {
       if (!slice) return false
 
       const stopCount = slice.segments.length - 1
-      if (filters.value.stops === 'nonstop' && stopCount !== 0) return false
-      if (filters.value.stops === 'one_stop' && stopCount !== 1) return false
+      if (filters.stops === 'nonstop' && stopCount !== 0) return false
+      if (filters.stops === 'one_stop' && stopCount !== 1) return false
 
-      if (filters.value.maxPrice !== null && Number(offer.total_amount) > filters.value.maxPrice) {
+      if (filters.airline && offer.owner.name !== filters.airline) return false
+
+      if (filters.maxPrice !== null && Number(offer.total_amount) > filters.maxPrice) {
         return false
       }
 
       const departureTime = slice.segments[0]?.departing_at.slice(11, 16)
-      if (filters.value.departureAfter && departureTime && departureTime < filters.value.departureAfter) {
+      if (filters.departureAfter && departureTime && departureTime < filters.departureAfter) {
         return false
       }
-      if (filters.value.departureBefore && departureTime && departureTime > filters.value.departureBefore) {
+      if (filters.departureBefore && departureTime && departureTime > filters.departureBefore) {
         return false
       }
 
@@ -137,18 +241,26 @@ export const useSearchStore = defineStore('search', () => {
     })
 
     const sorted = [...filtered]
+    const direction = sortDirection.value === 'asc' ? 1 : -1
     sorted.sort((a, b) => {
+      let comparison: number
       if (sort.value === 'price') {
-        return Number(a.total_amount) - Number(b.total_amount)
+        comparison = Number(a.total_amount) - Number(b.total_amount)
+      } else if (sort.value === 'duration') {
+        comparison = parseIsoDuration(a.slices[0]?.duration ?? 'PT0M') - parseIsoDuration(b.slices[0]?.duration ?? 'PT0M')
+      } else {
+        const aTime = a.slices[0]?.segments[0]?.departing_at ?? ''
+        const bTime = b.slices[0]?.segments[0]?.departing_at ?? ''
+        comparison = aTime.localeCompare(bTime)
       }
-      if (sort.value === 'duration') {
-        return parseIsoDuration(a.slices[0]?.duration ?? 'PT0M') - parseIsoDuration(b.slices[0]?.duration ?? 'PT0M')
-      }
-      const aTime = a.slices[0]?.segments[0]?.departing_at ?? ''
-      const bTime = b.slices[0]?.segments[0]?.departing_at ?? ''
-      return aTime.localeCompare(bTime)
+      return comparison * direction
     })
     return sorted
+  })
+
+  const availableAirlines = computed(() => {
+    const names = new Set(offers.value.map((offer) => offer.owner.name))
+    return [...names].sort((a, b) => a.localeCompare(b))
   })
 
   return {
@@ -158,8 +270,10 @@ export const useSearchStore = defineStore('search', () => {
     offerRequestId,
     error,
     sort,
+    sortDirection,
     filters,
     sortedFilteredOffers,
+    availableAirlines,
     search,
     shiftDateWindow,
     setSort,

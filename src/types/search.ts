@@ -4,10 +4,13 @@ export type { CabinClass }
 
 export type SortOption = 'price' | 'duration' | 'departure_time'
 
+export type SortDirection = 'asc' | 'desc'
+
 export type StopFilter = 'any' | 'nonstop' | 'one_stop'
 
 export interface FilterState {
   stops: StopFilter
+  airline: string | null
   maxPrice: number | null
   departureAfter: string | null
   departureBefore: string | null

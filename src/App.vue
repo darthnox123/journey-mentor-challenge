@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppHeader from '@/components/layout/AppHeader.vue';
 import SearchForm from '@/components/search/SearchForm.vue';
+import ResultsList from '@/components/results/ResultsList.vue'
 </script>
 
 <template>
@@ -10,6 +11,9 @@ import SearchForm from '@/components/search/SearchForm.vue';
       <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <SearchForm />
       </section>
+
+      <ResultsList />
+
     </main>
   </div>
 </template>
