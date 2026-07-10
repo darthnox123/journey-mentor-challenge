@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useSearchStore } from '@/stores/search'
 import { validateSearchForm } from '@/utils/validation'
 import type { PlaceSuggestion } from '@/types/duffel'
@@ -11,6 +11,24 @@ import DateInput from './DateInput.vue'
 const store = useSearchStore()
 
 const errors = reactive<Record<string, string>>({})
+
+// Kept local so free typing doesn't write into the URL on every keystroke —
+// only picking a suggestion or submitting commits into store.form (and the query params).
+const originDraft = ref(store.form.originName)
+const destinationDraft = ref(store.form.destinationName)
+
+watch(
+  () => store.form.originName,
+  (value) => {
+    originDraft.value = value
+  },
+)
+watch(
+  () => store.form.destinationName,
+  (value) => {
+    destinationDraft.value = value
+  },
+)
 
 const passengerOptions = Array.from({ length: 9 }, (_, i) => ({
   value: i + 1,
@@ -34,17 +52,19 @@ function onSelectDestination(place: PlaceSuggestion) {
   store.form.destinationName = place.city_name ?? place.name
 }
 
-function onOriginText(value: string) {
-  store.form.originName = value
-  if (!value) store.form.origin = ''
-}
-
-function onDestinationText(value: string) {
-  store.form.destinationName = value
-  if (!value) store.form.destination = ''
+function commitDrafts() {
+  if (!originDraft.value) {
+    store.form.origin = ''
+    store.form.originName = ''
+  }
+  if (!destinationDraft.value) {
+    store.form.destination = ''
+    store.form.destinationName = ''
+  }
 }
 
 async function onSubmit() {
+  commitDrafts()
   const result = validateSearchForm(store.form)
   Object.keys(errors).forEach((key) => delete errors[key])
   Object.assign(errors, result.errors)
@@ -57,21 +77,19 @@ async function onSubmit() {
   <form class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6" @submit.prevent="onSubmit">
     <div class="lg:col-span-2">
       <AutocompleteInput
+        v-model="originDraft"
         label="Origin"
         placeholder="City or airport"
-        :model-value="store.form.originName"
         :error="errors.origin"
-        @update:model-value="onOriginText"
         @select="onSelectOrigin"
       />
     </div>
     <div class="lg:col-span-2">
       <AutocompleteInput
+        v-model="destinationDraft"
         label="Destination"
         placeholder="City or airport"
-        :model-value="store.form.destinationName"
         :error="errors.destination"
-        @update:model-value="onDestinationText"
         @select="onSelectDestination"
       />
     </div>

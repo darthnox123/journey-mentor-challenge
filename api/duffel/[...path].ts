@@ -6,6 +6,11 @@ const DUFFEL_API_BASE_URL = process.env.DUFFEL_API_BASE_URL || 'https://api.duff
 const DUFFEL_VERSION = process.env.DUFFEL_VERSION || 'v2'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!process.env.DUFFEL_API_TOKEN) {
+    res.status(500).json({ errors: [{ message: 'Server misconfiguration: DUFFEL_API_TOKEN is not set.' }] })
+    return
+  }
+
   const segments = req.query.path
   const path = Array.isArray(segments) ? segments.join('/') : (segments ?? '')
 

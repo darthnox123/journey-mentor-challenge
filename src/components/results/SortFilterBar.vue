@@ -57,7 +57,7 @@ function onDepartureBefore(event: Event) {
             :id="afterId"
             type="time"
             :value="store.filters.departureAfter ?? ''"
-            class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+            class="field-input"
             @change="onDepartureAfter"
           />
         </div>
@@ -67,12 +67,14 @@ function onDepartureBefore(event: Event) {
             :id="beforeId"
             type="time"
             :value="store.filters.departureBefore ?? ''"
-            class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+            class="field-input"
             @change="onDepartureBefore"
           />
         </div>
       </div>
-      <p class="text-xs font-medium text-slate-400">{{ store.sortedFilteredOffers.length }} of {{ store.offers.length }} offers</p>
+      <p class="text-xs font-medium text-slate-400">
+        {{ store.status === 'loading' ? 'Searching…' : `${store.sortedFilteredOffers.length} of ${store.offers.length} offers` }}
+      </p>
     </div>
   </div>
 </template>

@@ -12,6 +12,24 @@ export class DuffelApiError extends Error {
   }
 }
 
+// User-facing copy — deliberately doesn't surface `error.message`, which is Duffel's
+// raw API error text and not written for end users.
+export function friendlyErrorMessage(error: unknown): string {
+  if (error instanceof DuffelApiError) {
+    if (error.status === 400 || error.status === 422) {
+      return 'Check your search details and try again.'
+    }
+    if (error.status === 429) {
+      return 'Too many requests — please wait a moment and try again.'
+    }
+    if (error.status >= 500) {
+      return 'The flight search service is temporarily unavailable. Please try again shortly.'
+    }
+    return 'The flight search service is temporarily unavailable. Please try again later.'
+  }
+  return 'Something went wrong. Please try again.'
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST'
   body?: unknown

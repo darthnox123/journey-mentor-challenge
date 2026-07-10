@@ -11,7 +11,6 @@ export type StopFilter = 'any' | 'nonstop' | 'one_stop'
 export interface FilterState {
   stops: StopFilter
   airline: string | null
-  maxPrice: number | null
   departureAfter: string | null
   departureBefore: string | null
 }

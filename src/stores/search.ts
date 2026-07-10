@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useUrlSearchParams } from '@vueuse/core'
 import { createOfferRequest } from '@/services/offers'
-import { DuffelApiError } from '@/services/duffelClient'
+import { friendlyErrorMessage } from '@/services/duffelClient'
 import { parseIsoDuration } from '@/utils/duration'
 import { shiftDate, todayIsoDate } from '@/utils/date'
 import { useSearchHistoryStore } from '@/stores/searchHistory'
@@ -21,7 +21,6 @@ interface SearchQueryParams {
   dir?: string
   stops?: string
   airline?: string
-  maxPrice?: string
   after?: string
   before?: string
 }
@@ -93,12 +92,6 @@ export const useSearchStore = defineStore('search', () => {
     set airline(value: string | null) {
       query.airline = value || undefined
     },
-    get maxPrice() {
-      return query.maxPrice ? Number(query.maxPrice) : null
-    },
-    set maxPrice(value: number | null) {
-      query.maxPrice = value != null ? String(value) : undefined
-    },
     get departureAfter() {
       return query.after || null
     },
@@ -168,7 +161,7 @@ export const useSearchStore = defineStore('search', () => {
       offers.value = []
       offerRequestId.value = null
       status.value = 'error'
-      error.value = err instanceof DuffelApiError ? err.message : 'Something went wrong. Please try again.'
+      error.value = friendlyErrorMessage(err)
     }
   }
 
@@ -194,29 +187,6 @@ export const useSearchStore = defineStore('search', () => {
     Object.assign(filters, partial)
   }
 
-  function reset() {
-    currentController?.abort()
-    requestSeq++
-    query.origin = undefined
-    query.originName = undefined
-    query.destination = undefined
-    query.destinationName = undefined
-    query.date = undefined
-    query.pax = undefined
-    query.cabin = undefined
-    query.stops = undefined
-    query.airline = undefined
-    query.maxPrice = undefined
-    query.after = undefined
-    query.before = undefined
-    query.sort = undefined
-    query.dir = undefined
-    offers.value = []
-    offerRequestId.value = null
-    status.value = 'idle'
-    error.value = null
-  }
-
   const sortedFilteredOffers = computed(() => {
     const filtered = offers.value.filter((offer) => {
       const slice = offer.slices[0]
@@ -227,10 +197,6 @@ export const useSearchStore = defineStore('search', () => {
       if (filters.stops === 'one_stop' && stopCount !== 1) return false
 
       if (filters.airline && offer.owner.name !== filters.airline) return false
-
-      if (filters.maxPrice !== null && Number(offer.total_amount) > filters.maxPrice) {
-        return false
-      }
 
       const departureTime = slice.segments[0]?.departing_at.slice(11, 16)
       if (filters.departureAfter && departureTime && departureTime < filters.departureAfter) {
@@ -281,6 +247,5 @@ export const useSearchStore = defineStore('search', () => {
     shiftDateWindow,
     setSort,
     setFilters,
-    reset,
   }
 })
