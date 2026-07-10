@@ -11,12 +11,10 @@ const store = useSearchStore()
 
 <template>
   <div class="space-y-4">
+    <SortFilterBar v-if="store.status !== 'idle'" />
     <LoadingState v-if="store.status === 'loading'" />
     <ErrorState v-else-if="store.status === 'error'" :message="store.error ?? 'Something went wrong.'" @retry="store.search()" />
     <EmptyState v-else-if="store.status === 'empty'" />
-    <div v-else-if="store.status === 'success'" class="space-y-4">
-      <SortFilterBar />
-      <OffersTable />
-    </div>
+    <OffersTable v-else-if="store.status === 'success'" />
   </div>
 </template>

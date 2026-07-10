@@ -5,6 +5,7 @@ import { createOfferRequest } from '@/services/offers'
 import { DuffelApiError } from '@/services/duffelClient'
 import { parseIsoDuration } from '@/utils/duration'
 import { shiftDate, todayIsoDate } from '@/utils/date'
+import { useSearchHistoryStore } from '@/stores/searchHistory'
 import type { CabinClass, Offer } from '@/types/duffel'
 import type { FilterState, SearchFormState, SearchStatus, SortDirection, SortOption, StopFilter } from '@/types/search'
 
@@ -31,6 +32,7 @@ let currentController: AbortController | null = null
 let requestSeq = 0
 
 export const useSearchStore = defineStore('search', () => {
+  const historyStore = useSearchHistoryStore()
   const query = useUrlSearchParams<SearchQueryParams>('history')
 
   const form = reactive<SearchFormState>({
@@ -158,6 +160,7 @@ export const useSearchStore = defineStore('search', () => {
       offers.value = response.data.offers
       offerRequestId.value = response.data.id
       status.value = response.data.offers.length > 0 ? 'success' : 'empty'
+      historyStore.record({ ...form })
     } catch (err) {
       if (seq !== requestSeq) return
       if (err instanceof DOMException && err.name === 'AbortError') return

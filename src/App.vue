@@ -2,11 +2,7 @@
 import AppHeader from '@/components/layout/AppHeader.vue';
 import SearchForm from '@/components/search/SearchForm.vue';
 import ResultsList from '@/components/results/ResultsList.vue'
-import DateWindowShifter from '@/components/search/DateWindowShifter.vue'
-import { useSearchStore } from '@/stores/search'
-
-
-const store = useSearchStore()
+import SearchHistoryPanel from '@/components/history/SearchHistoryPanel.vue'
 </script>
 
 <template>
@@ -17,10 +13,9 @@ const store = useSearchStore()
         <SearchForm />
       </section>
 
-      <DateWindowShifter v-if="store.status !== 'idle'" />
+      <SearchHistoryPanel />
 
       <ResultsList />
-
     </main>
   </div>
 </template>
