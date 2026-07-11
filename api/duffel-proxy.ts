@@ -25,6 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (queryIndex !== -1) {
     url.search = originalUrl.slice(queryIndex)
   }
+  url.searchParams.delete('path')
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${process.env.DUFFEL_API_TOKEN}`,

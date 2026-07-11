@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/duffel/:path*", "destination": "/api/duffel-proxy?path=:path*" }
+  ]
+}
