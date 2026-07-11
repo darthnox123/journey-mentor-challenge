@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useSearchStore } from '@/stores/search'
 import { validateSearchForm } from '@/utils/validation'
 import type { PlaceSuggestion } from '@/types/duffel'
@@ -42,6 +42,14 @@ const cabinClassOptions: Array<{ value: CabinClass; label: string }> = [
   { value: 'first', label: 'First' },
 ]
 
+// DateInput needs a plain string; the store models "no return date" (one-way) as null.
+const returnDate = computed({
+  get: () => store.form.returnDate ?? '',
+  set: (value: string) => {
+    store.form.returnDate = value || null
+  },
+})
+
 function onSelectOrigin(place: PlaceSuggestion) {
   store.form.origin = place.iata_code
   store.form.originName = place.city_name ?? place.name
@@ -52,12 +60,14 @@ function onSelectDestination(place: PlaceSuggestion) {
   store.form.destinationName = place.city_name ?? place.name
 }
 
+// A draft that no longer matches the last confirmed selection (edited after picking a
+// suggestion, or never picked one at all) must not silently submit the stale origin/destination.
 function commitDrafts() {
-  if (!originDraft.value) {
+  if (originDraft.value !== store.form.originName) {
     store.form.origin = ''
     store.form.originName = ''
   }
-  if (!destinationDraft.value) {
+  if (destinationDraft.value !== store.form.destinationName) {
     store.form.destination = ''
     store.form.destinationName = ''
   }
@@ -81,6 +91,7 @@ async function onSubmit() {
         label="Origin"
         placeholder="City or airport"
         :error="errors.origin"
+        required
         @select="onSelectOrigin"
       />
     </div>
@@ -90,11 +101,15 @@ async function onSubmit() {
         label="Destination"
         placeholder="City or airport"
         :error="errors.destination"
+        required
         @select="onSelectDestination"
       />
     </div>
     <div>
-      <DateInput v-model="store.form.departureDate" label="Departure date" :error="errors.departureDate" />
+      <DateInput v-model="store.form.departureDate" label="Departure date" :error="errors.departureDate" required />
+    </div>
+    <div>
+      <DateInput v-model="returnDate" label="Return date" :error="errors.returnDate" />
     </div>
     <div>
       <Select
@@ -104,11 +119,10 @@ async function onSubmit() {
         :error="errors.passengers"
       />
     </div>
-
     <div class="lg:col-span-2">
       <Select v-model="store.form.cabinClass" label="Cabin class" :options="cabinClassOptions" />
     </div>
-    <div class="flex items-end lg:col-span-4">
+    <div class="flex items-end lg:col-span-3">
       <button
         type="submit"
         class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"

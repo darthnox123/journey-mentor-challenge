@@ -28,6 +28,12 @@ export function validateSearchForm(form: SearchFormState): ValidationResult {
     if (departure < today) {
       errors.departureDate = 'Departure date cannot be in the past'
     }
+    if (form.returnDate) {
+      const returnDate = new Date(`${form.returnDate}T00:00:00`)
+      if (returnDate < departure) {
+        errors.returnDate = 'Return date cannot be before the departure date'
+      }
+    }
   }
   if (!Number.isInteger(form.passengers) || form.passengers < 1 || form.passengers > 9) {
     errors.passengers = 'Choose between 1 and 9 passengers'

@@ -33,7 +33,7 @@ DUFFEL_VERSION=v2
 ## Architecture
 
 ```
-Browser  →  /api/duffel/*  →  proxy (dev: Vite server.proxy, prod: Vercel function)  →  api.duffel.com
+Browser  →  /api/duffel/*  →  proxy (dev: Vite server.proxy, prod: Vercel rewrite + function)  →  api.duffel.com
 ```
 
 The frontend never talks to `api.duffel.com` directly and never sees the Duffel token. It only calls
@@ -42,9 +42,12 @@ same-origin relative paths (`/api/duffel/...`). Both proxies share the same cont
 
 - **Dev** — `vite.config.ts` reads the env vars via `loadEnv` (Node-only, never bundled) and configures
   `server.proxy['/api/duffel']`, injecting the auth header in the `proxyReq` hook.
-- **Production** — `api/duffel/[...path].ts` is a Vercel catch-all function with an allowlist of Duffel
-  path prefixes (`air/offer_requests`, `air/offers`, `places/suggestions`). It always overwrites any
-  `Authorization` header sent by the client and forwards Duffel's status/error body unchanged.
+- **Production** — `api/duffel-proxy.ts` is a Vercel serverless function with an allowlist of Duffel
+  path prefixes (`air/offer_requests`, `air/offers`, `places/suggestions`). `vercel.json` rewrites
+  `/api/duffel/:path*` to it (`?path=:path*`), rather than relying on Vercel's filesystem catch-all
+  routing (`api/duffel/[...path].ts`), which only matched single-segment paths in production — see
+  the git history for that fix. The function always overwrites any `Authorization` header sent by the
+  client and forwards Duffel's status/error body unchanged.
 
 This was a deliberate fix: the project originally had `VITE_DUFFEL_API_URL`/`VITE_DUFFEL_API_TOKEN`,
 which Vite inlines into the client bundle — anyone could `view-source` the token. Renaming to
@@ -95,14 +98,24 @@ unprefixed, server-only vars and routing everything through the proxy closes tha
   `utils/duration.ts`.
 - **User-facing errors are mapped, not passed through** — `services/duffelClient.ts` exposes
   `friendlyErrorMessage()`, so `ErrorState` never shows Duffel's raw API error text to the end user.
+- **Round trips are a second slice, not a second search** — `form.returnDate` is optional; when set,
+  `services/offers.ts` adds a return slice (`destination → origin`) to the same `POST /air/offer_requests`
+  payload, so Duffel returns each offer with both slices already priced together. `utils/offer.ts` centralizes
+  `stopCount()` and `totalDurationMinutes()` as sums across **all** slices, so sorting/filtering and the
+  results table behave consistently whether an offer has one slice (one-way) or two (round trip).
+- **Autocomplete selection vs. free typing** — `AutocompleteInput` writes the exact same string to the
+  draft on `select` as `SearchForm` commits to `form.originName`/`destinationName`. `SearchForm.commitDrafts()`
+  compares the draft against that committed name on submit and clears `origin`/`originName` (or
+  `destination`/`destinationName`) on any mismatch — so editing the text after picking a suggestion, without
+  picking a new one, fails validation instead of silently submitting the stale IATA code.
 
 ## Bonus features implemented
 
 - Debounced autocomplete for origin/destination (`usePlaceAutocomplete`, 300ms debounce via
   `useDebounceFn`), with its own abort/sequence guard per input instance.
 - Sort (price / duration / departure time, ascending or descending, toggled from the table headers) and
-  filter (stops, airline, departure time window) — combinable, computed client-side over the last
-  successful offer set.
+  filter (stops — nonstop / 1 / 2+, airline, price range, departure time window) — combinable, computed
+  client-side over the last successful offer set.
 - Persisted search history (last 10, deduped by origin/destination/date), one click re-runs a past search.
 
 ## What was left out, and why
@@ -110,10 +123,18 @@ unprefixed, server-only vars and routing everything through the proxy closes tha
 - A dedicated date-range picker for the "date window" bonus — implemented instead as a ± one day shifter
   that re-issues a fresh `POST /air/offer_requests` (offer requests are immutable; Duffel has no `PATCH`
   for the departure date), which is enough to demonstrate the state-machine/race-guard behavior the
-  challenge is checking for.
+  challenge is checking for. Shifting preserves the outbound/return gap when a return date is set.
 - A literal 3-column desktop layout — the top filter bar + full-width results table already solves the
   "don't waste a wide viewport" problem; a third column would need a summary/comparison panel this app's
   data model doesn't have a real use for yet.
+- Baggage allowance in the offer detail falls back to "no info" per segment if Duffel's sandbox doesn't
+  populate `segments[].passengers[].baggages` for a given fare — this is sandbox data availability, not
+  something the client can compute.
+- **Automated tests.** Not part of the brief's requirements, so no test runner was added; the time budget
+  went to the Core/bonus feature list instead. If this were extended, the first tests added would be the
+  pure functions with no Vue/DOM dependency — `utils/validation.ts`, `utils/duration.ts`, `utils/offer.ts`,
+  `utils/date.ts` — since they're the cheapest to test and encode the trickiest logic (ISO 8601 duration
+  parsing, round-trip stop/duration aggregation, date-window shifting).
 
 ## Race conditions
 
@@ -128,7 +149,13 @@ input instance, so typing quickly in both Origin and Destination can't cross-wri
 1. Push to a GitHub repo, import it in Vercel.
 2. Set `DUFFEL_API_TOKEN`, `DUFFEL_API_BASE_URL`, `DUFFEL_VERSION` as Environment Variables for both
    Production and Preview (Project Settings → Environment Variables).
-3. Deploy. The `api/duffel/[...path].ts` function is picked up automatically by Vercel's file-based
-   routing — no extra config needed.
+3. Deploy. `api/duffel-proxy.ts` is picked up automatically as a serverless function; `vercel.json`
+   rewrites `/api/duffel/*` requests to it — no extra dashboard config needed.
 4. Verify: DevTools Network tab should only ever show requests to `/api/duffel/...`, never
    `api.duffel.com` directly; `grep -R "duffel_test" dist/` should return nothing after `npm run build`.
+
+## A note on this README
+
+This documentation (structure, wording, the trade-off write-ups above) was drafted with the help of an
+AI/LLM assistant, then reviewed and edited. The code changes it describes were also implemented with
+AI assistance, under direction and review.

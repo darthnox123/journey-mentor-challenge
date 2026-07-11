@@ -31,6 +31,18 @@ export interface DuffelCarrier {
   iata_code: string | null
 }
 
+export interface DuffelBaggage {
+  type: 'checked' | 'carry_on'
+  quantity: number
+}
+
+export interface OfferSegmentPassenger {
+  passenger_id: string
+  cabin_class: CabinClass | null
+  cabin_class_marketing_name: string | null
+  baggages: DuffelBaggage[]
+}
+
 export interface OfferSegment {
   id: string
   origin: DuffelPlace
@@ -41,6 +53,18 @@ export interface OfferSegment {
   marketing_carrier_flight_number: string
   marketing_carrier: DuffelCarrier
   operating_carrier: DuffelCarrier
+  passengers: OfferSegmentPassenger[]
+}
+
+export interface DuffelConditionDetail {
+  allowed: boolean
+  penalty_amount: string | null
+  penalty_currency: string | null
+}
+
+export interface OfferConditions {
+  refund_before_departure: DuffelConditionDetail | null
+  change_before_departure: DuffelConditionDetail | null
 }
 
 export interface OfferSlice {
@@ -63,6 +87,7 @@ export interface Offer {
   expires_at: string
   owner: DuffelCarrier
   slices: OfferSlice[]
+  conditions?: OfferConditions | null
 }
 
 export interface OfferRequestResponse {

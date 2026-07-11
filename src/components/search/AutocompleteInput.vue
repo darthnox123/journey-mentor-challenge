@@ -8,6 +8,7 @@ defineProps<{
   label: string
   placeholder: string
   error?: string
+  required?: boolean
 }>()
 
 const model = defineModel<string>({ required: true })
@@ -33,7 +34,9 @@ function onInput(event: Event) {
 }
 
 function onSelect(place: PlaceSuggestion) {
-  model.value = place.city_name ? `${place.city_name} (${place.iata_code})` : `${place.name} (${place.iata_code})`
+  // Mirrors what SearchForm writes to `form.originName`/`destinationName` on 'select',
+  // so a later edit can be detected by comparing the draft against that committed name.
+  model.value = place.city_name ?? place.name
   emit('select', place)
   isOpen.value = false
   clear()
@@ -46,13 +49,16 @@ function onFocus() {
 
 <template>
   <div ref="rootRef" class="relative">
-    <label :for="inputId" class="mb-1 block text-sm font-medium text-slate-700">{{ label }}</label>
+    <label :for="inputId" class="mb-1 block text-sm font-medium text-slate-700">
+      {{ label }}<span v-if="required" class="text-red-500" aria-hidden="true"> *</span>
+    </label>
     <input
       :id="inputId"
       :value="model"
       type="text"
       autocomplete="off"
       :placeholder="placeholder"
+      :aria-required="required"
       class="field-input"
       :class="{ 'field-input--error': error }"
       @input="onInput"

@@ -8,11 +8,14 @@ export function parseIsoDuration(iso: string): number {
   return days * 24 * 60 + hours * 60 + minutes
 }
 
-export function formatDuration(iso: string): string {
-  const totalMinutes = parseIsoDuration(iso)
+export function formatMinutes(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
   if (hours === 0) return `${minutes}m`
   if (minutes === 0) return `${hours}h`
   return `${hours}h ${minutes}m`
+}
+
+export function formatDuration(iso: string): string {
+  return formatMinutes(parseIsoDuration(iso))
 }

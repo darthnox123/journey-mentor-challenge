@@ -9,11 +9,14 @@ const store = useSearchStore()
 
 const afterId = useId()
 const beforeId = useId()
+const minPriceId = useId()
+const maxPriceId = useId()
 
 const stopOptions: Array<{ value: StopFilter; label: string }> = [
   { value: 'any', label: 'Any stops' },
   { value: 'nonstop', label: 'Nonstop' },
   { value: 'one_stop', label: '1 stop' },
+  { value: 'two_plus', label: '2+ stops' },
 ]
 
 const airlineOptions = computed(() => [
@@ -37,6 +40,16 @@ function onDepartureAfter(event: Event) {
 
 function onDepartureBefore(event: Event) {
   store.setFilters({ departureBefore: (event.target as HTMLInputElement).value || null })
+}
+
+function onMinPrice(event: Event) {
+  const value = (event.target as HTMLInputElement).value
+  store.setFilters({ minPrice: value ? Number(value) : null })
+}
+
+function onMaxPrice(event: Event) {
+  const value = (event.target as HTMLInputElement).value
+  store.setFilters({ maxPrice: value ? Number(value) : null })
 }
 </script>
 
@@ -69,6 +82,30 @@ function onDepartureBefore(event: Event) {
             :value="store.filters.departureBefore ?? ''"
             class="field-input"
             @change="onDepartureBefore"
+          />
+        </div>
+        <div class="w-24">
+          <label :for="minPriceId" class="mb-1 block text-xs font-medium text-slate-600">Min price</label>
+          <input
+            :id="minPriceId"
+            type="number"
+            min="0"
+            placeholder="0"
+            :value="store.filters.minPrice ?? ''"
+            class="field-input"
+            @change="onMinPrice"
+          />
+        </div>
+        <div class="w-24">
+          <label :for="maxPriceId" class="mb-1 block text-xs font-medium text-slate-600">Max price</label>
+          <input
+            :id="maxPriceId"
+            type="number"
+            min="0"
+            placeholder="Any"
+            :value="store.filters.maxPrice ?? ''"
+            class="field-input"
+            @change="onMaxPrice"
           />
         </div>
       </div>

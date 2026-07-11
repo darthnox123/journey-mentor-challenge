@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { defineAsyncComponent, reactive } from 'vue'
 import { useSearchStore } from '@/stores/search'
-import { formatDuration } from '@/utils/duration'
+import { formatMinutes } from '@/utils/duration'
 import { formatPrice } from '@/utils/money'
-import { formatTime } from '@/utils/date'
-import type { Offer } from '@/types/duffel'
+import { formatTime, formatDateLabel } from '@/utils/date'
+import { stopCount, totalDurationMinutes } from '@/utils/offer'
 import type { SortOption } from '@/types/search'
 import SortIcon from './SortIcon.vue'
 
@@ -31,10 +31,6 @@ const sortableColumns: Array<{ key: SortOption; label: string }> = [
 function ariaSort(column: SortOption): 'ascending' | 'descending' | 'none' {
   if (store.sort !== column) return 'none'
   return store.sortDirection === 'asc' ? 'ascending' : 'descending'
-}
-
-function stopCount(offer: Offer): number {
-  return offer.slices[0]!.segments.length - 1
 }
 </script>
 
@@ -65,10 +61,17 @@ function stopCount(offer: Offer): number {
         <template v-for="offer in store.sortedFilteredOffers" :key="offer.id">
           <tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" @click="toggleExpanded(offer.id)">
             <td class="px-4 py-3 font-medium text-slate-800">
-              {{ formatTime(offer.slices[0]!.segments[0]!.departing_at) }} →
-              {{ formatTime(offer.slices[0]!.segments[offer.slices[0]!.segments.length - 1]!.arriving_at) }}
+              <div>
+                {{ formatTime(offer.slices[0]!.segments[0]!.departing_at) }} →
+                {{ formatTime(offer.slices[0]!.segments[offer.slices[0]!.segments.length - 1]!.arriving_at) }}
+              </div>
+              <div v-if="offer.slices.length > 1" class="mt-0.5 text-xs font-normal text-slate-400">
+                Return {{ formatDateLabel(offer.slices[1]!.segments[0]!.departing_at.slice(0, 10)) }}
+                {{ formatTime(offer.slices[1]!.segments[0]!.departing_at) }} →
+                {{ formatTime(offer.slices[1]!.segments[offer.slices[1]!.segments.length - 1]!.arriving_at) }}
+              </div>
             </td>
-            <td class="px-4 py-3 text-slate-600">{{ formatDuration(offer.slices[0]!.duration) }}</td>
+            <td class="px-4 py-3 text-slate-600">{{ formatMinutes(totalDurationMinutes(offer)) }}</td>
             <td class="px-4 py-3 font-semibold text-slate-900">{{ formatPrice(offer.total_amount, offer.total_currency) }}</td>
             <td class="px-4 py-3 text-slate-600">{{ offer.owner.name }}</td>
             <td class="px-4 py-3 text-slate-600">

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { useUrlSearchParams } from '@vueuse/core'
 import { createOfferRequest } from '@/services/offers'
 import { friendlyErrorMessage } from '@/services/duffelClient'
-import { parseIsoDuration } from '@/utils/duration'
+import { stopCount, totalDurationMinutes } from '@/utils/offer'
 import { shiftDate, todayIsoDate } from '@/utils/date'
 import { useSearchHistoryStore } from '@/stores/searchHistory'
 import type { CabinClass, Offer } from '@/types/duffel'
@@ -15,6 +15,7 @@ interface SearchQueryParams {
   destination?: string
   destinationName?: string
   date?: string
+  returnDate?: string
   pax?: string
   cabin?: string
   sort?: string
@@ -23,6 +24,8 @@ interface SearchQueryParams {
   airline?: string
   after?: string
   before?: string
+  minPrice?: string
+  maxPrice?: string
 }
 
 // Module-scoped so aborting/sequencing survives store re-instantiation without
@@ -65,6 +68,12 @@ export const useSearchStore = defineStore('search', () => {
     set departureDate(value: string) {
       query.date = value || undefined
     },
+    get returnDate() {
+      return query.returnDate || null
+    },
+    set returnDate(value: string | null) {
+      query.returnDate = value || undefined
+    },
     get passengers() {
       return Number(query.pax) || 1
     },
@@ -103,6 +112,18 @@ export const useSearchStore = defineStore('search', () => {
     },
     set departureBefore(value: string | null) {
       query.before = value || undefined
+    },
+    get minPrice() {
+      return query.minPrice ? Number(query.minPrice) : null
+    },
+    set minPrice(value: number | null) {
+      query.minPrice = value != null ? String(value) : undefined
+    },
+    get maxPrice() {
+      return query.maxPrice ? Number(query.maxPrice) : null
+    },
+    set maxPrice(value: number | null) {
+      query.maxPrice = value != null ? String(value) : undefined
     },
   })
 
@@ -143,6 +164,7 @@ export const useSearchStore = defineStore('search', () => {
         origin: form.origin,
         destination: form.destination,
         departureDate: form.departureDate,
+        returnDate: form.returnDate,
         passengers: form.passengers,
         cabinClass: form.cabinClass,
         signal: controller.signal,
@@ -166,12 +188,26 @@ export const useSearchStore = defineStore('search', () => {
   }
 
   // The URL already encodes a complete search (deep link, shared link, reload) — run it.
+  // This bypasses the form's own validation, so a stale bookmarked/shared link with a
+  // departure date that has since passed would otherwise hit Duffel and surface a raw
+  // 422 instead of a usable result — clamp it forward the same way validation would.
   if (form.origin && form.destination) {
+    const today = todayIsoDate()
+    if (form.departureDate < today) {
+      form.departureDate = today
+    }
+    if (form.returnDate && form.returnDate < form.departureDate) {
+      form.returnDate = form.departureDate
+    }
     search()
   }
 
   function shiftDateWindow(deltaDays: number) {
-    return search({ departureDate: shiftDate(form.departureDate, deltaDays) })
+    return search({
+      departureDate: shiftDate(form.departureDate, deltaDays),
+      // Keep the same trip length instead of letting the return date fall before the new departure.
+      returnDate: form.returnDate ? shiftDate(form.returnDate, deltaDays) : null,
+    })
   }
 
   function setSort(option: SortOption) {
@@ -192,11 +228,16 @@ export const useSearchStore = defineStore('search', () => {
       const slice = offer.slices[0]
       if (!slice) return false
 
-      const stopCount = slice.segments.length - 1
-      if (filters.stops === 'nonstop' && stopCount !== 0) return false
-      if (filters.stops === 'one_stop' && stopCount !== 1) return false
+      const stops = stopCount(offer)
+      if (filters.stops === 'nonstop' && stops !== 0) return false
+      if (filters.stops === 'one_stop' && stops !== 1) return false
+      if (filters.stops === 'two_plus' && stops < 2) return false
 
       if (filters.airline && offer.owner.name !== filters.airline) return false
+
+      const price = Number(offer.total_amount)
+      if (filters.minPrice != null && price < filters.minPrice) return false
+      if (filters.maxPrice != null && price > filters.maxPrice) return false
 
       const departureTime = slice.segments[0]?.departing_at.slice(11, 16)
       if (filters.departureAfter && departureTime && departureTime < filters.departureAfter) {
@@ -216,7 +257,7 @@ export const useSearchStore = defineStore('search', () => {
       if (sort.value === 'price') {
         comparison = Number(a.total_amount) - Number(b.total_amount)
       } else if (sort.value === 'duration') {
-        comparison = parseIsoDuration(a.slices[0]?.duration ?? 'PT0M') - parseIsoDuration(b.slices[0]?.duration ?? 'PT0M')
+        comparison = totalDurationMinutes(a) - totalDurationMinutes(b)
       } else {
         const aTime = a.slices[0]?.segments[0]?.departing_at ?? ''
         const bTime = b.slices[0]?.segments[0]?.departing_at ?? ''
